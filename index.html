@@ -155,8 +155,26 @@
 
 <!-- ===================== ESPACE CANDIDAT ===================== -->
 <main id="viewCandidate">
-  <div id="candidateFormWrap">
-    <h2>Créer mon profil candidat</h2>
+
+  <div id="candidateChoice" style="max-width:420px; margin:20px auto; text-align:center;">
+    <button class="btn-blue" style="width:100%; justify-content:center; margin-bottom:10px;" onclick="startNewRegistration()">📝 Nouvelle inscription</button>
+    <button class="btn-ghost" style="width:100%; justify-content:center;" onclick="showCandidateLogin()">🔑 Me connecter à mon compte</button>
+  </div>
+
+  <div id="candidateLoginWrap" class="hidden" style="max-width:380px; margin:20px auto; text-align:center; padding:0 16px;">
+    <h2>Connexion à mon compte</h2>
+    <div class="field" style="text-align:left;"><label>Nom d'utilisateur</label><input id="loginUsername"></div>
+    <div class="field" style="text-align:left;">
+      <label>Mot de passe</label>
+      <div class="pass-wrap"><span class="lock">🔒</span><input type="password" id="loginPassword"><button class="eye" onclick="toggleShow('loginPassword',this)">👁️</button></div>
+    </div>
+    <p class="note" id="loginCandidateMsg" style="color:#c0392b;"></p>
+    <button class="btn-blue" style="width:100%; justify-content:center;" onclick="candidateLogin()">Se connecter</button>
+    <button class="btn-ghost" style="width:100%; justify-content:center; margin-top:8px;" onclick="backToChoice()">← Retour</button>
+  </div>
+
+  <div id="candidateFormWrap" class="hidden">
+    <h2 id="formTitle">Créer mon profil candidat</h2>
     <div class="steps">
       <div class="step active" data-step="0"><div class="bar"></div><span>Informations</span></div>
       <div class="step" data-step="1"><div class="bar"></div><span>Photos</span></div>
@@ -165,6 +183,11 @@
 
     <!-- Etape 0 : infos -->
     <div id="cstep0" class="grid2">
+      <div class="field"><label>Nom d'utilisateur (pour me reconnecter) <span class="required">*</span></label><input id="f_username"></div>
+      <div class="field">
+        <label>Mot de passe <span class="required">*</span></label>
+        <div class="pass-wrap"><span class="lock">🔒</span><input type="password" id="f_password"><button class="eye" onclick="toggleShow('f_password',this)">👁️</button></div>
+      </div>
       <div class="field"><label>Nom complet <span class="required">*</span></label><input id="f_nom"></div>
       <div class="field">
         <label>Date de naissance</label>
@@ -181,6 +204,9 @@
         </div>
       </div>
       <div class="field"><label>Lieu de naissance</label><input id="f_pob"></div>
+      <div class="field"><label>Pays</label>
+        <select id="f_pays" onchange="syncIndicatif()"></select>
+      </div>
       <div class="field"><label>Contact 1 (téléphone) <span class="required">*</span></label>
         <div style="display:grid; grid-template-columns:110px 1fr; gap:8px;">
           <select id="f_c1_code"></select>
@@ -196,9 +222,6 @@
       <div class="field"><label>Email</label><input type="email" id="f_email"></div>
       <div class="field"><label>Niveau d'étude</label><input id="f_etude"></div>
       <div class="field"><label>Poste souhaité <span class="required">*</span></label><input id="f_poste"></div>
-      <div class="field"><label>Pays</label>
-        <select id="f_pays" onchange="syncIndicatif()"></select>
-      </div>
       <div class="field"><label>Ville</label><input id="f_ville"></div>
       <div class="field"><label>Commune / Quartier</label><input id="f_commune"></div>
       <div class="field"><label>Nationalité</label><input id="f_nat"></div>
@@ -210,6 +233,15 @@
         <div class="field"><label>Expériences professionnelles</label><textarea rows="3" id="f_exp"></textarea></div>
         <div class="field"><label>Compétences</label><textarea rows="2" id="f_comp"></textarea></div>
         <div class="field"><label>Motivation</label><textarea rows="2" id="f_moti"></textarea></div>
+
+        <h3 style="margin-top:10px;">🆘 Personnes à contacter en cas d'urgence</h3>
+        <p class="note">Deux proches que nous pouvons joindre en cas de besoin (optionnel mais recommandé).</p>
+        <div class="grid2">
+          <div class="field"><label>Personne 1 — Nom</label><input id="f_urg1_nom"></div>
+          <div class="field"><label>Personne 1 — Téléphone</label><input id="f_urg1_tel"></div>
+          <div class="field"><label>Personne 2 — Nom</label><input id="f_urg2_nom"></div>
+          <div class="field"><label>Personne 2 — Téléphone</label><input id="f_urg2_tel"></div>
+        </div>
       </div>
     </div>
 
@@ -233,6 +265,12 @@
         <div class="photo-box" style="width:70px;height:70px;border-radius:12px;" onclick="document.getElementById('pOtherInput').click()">＋</div>
         <input type="file" accept="image/*" id="pOtherInput" class="hidden" onchange="addOtherPhoto(this)">
       </div>
+
+      <h3 style="margin-top:22px;">📄 Documents (diplômes, CV, autres)</h3>
+      <p class="note">Prenez une photo avec l'appareil ou choisissez un fichier depuis la galerie.</p>
+      <div id="docsList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;"></div>
+      <button type="button" class="btn-ghost" style="width:100%; justify-content:center;" onclick="document.getElementById('docInput').click()">📎 Ajouter un document</button>
+      <input type="file" accept="image/*,application/pdf" id="docInput" class="hidden" onchange="addDocument(this)">
     </div>
 
     <!-- Etape 2 : paiement (flux réaliste : montant -> opérateur -> numéro -> référence -> validation) -->
@@ -465,13 +503,17 @@ const COUNTRY_CODES = {
   "Inde":"91","Turquie":"90",
   "Autre":"",
 };
+// Pays où le "0" initial fait partie intégrante du numéro national et doit
+// être conservé même après l'indicatif (ex: Côte d'Ivoire depuis la réforme
+// de numérotation à 10 chiffres de janvier 2021).
+const KEEP_LEADING_ZERO = ["Côte d'Ivoire"];
 function whatsappNumber(contact, pays){
   let digits = (contact || '').replace(/\D/g,'');
   if(!digits) return '';
   const code = COUNTRY_CODES[pays];
   if(code){
     if(digits.startsWith(code)) return digits; // déjà au format international
-    if(digits.startsWith('0')) digits = digits.slice(1); // retire le 0 initial local
+    if(digits.startsWith('0') && !KEEP_LEADING_ZERO.includes(pays)) digits = digits.slice(1);
     return code + digits;
   }
   return digits; // pays inconnu : on laisse tel quel (l'utilisateur devra vérifier)
@@ -494,6 +536,118 @@ function showView(v){
 }
 
 // ---------- Formulaire candidat : étapes ----------
+// ---------- Navigation Espace candidat : choix / connexion / formulaire ----------
+let editingCandidateId = null; // null = nouvelle inscription, sinon = édition d'un profil existant
+
+function backToChoice(){
+  document.getElementById('candidateChoice').classList.remove('hidden');
+  document.getElementById('candidateLoginWrap').classList.add('hidden');
+  document.getElementById('candidateFormWrap').classList.add('hidden');
+  document.getElementById('candidateDone').classList.add('hidden');
+}
+function showCandidateLogin(){
+  document.getElementById('candidateChoice').classList.add('hidden');
+  document.getElementById('candidateLoginWrap').classList.remove('hidden');
+}
+function startNewRegistration(){
+  editingCandidateId = null;
+  document.getElementById('formTitle').textContent = 'Créer mon profil candidat';
+  document.getElementById('candidateChoice').classList.add('hidden');
+  document.getElementById('candidateFormWrap').classList.remove('hidden');
+  document.getElementById('cstep2').style.display = ''; // étape paiement visible pour une nouvelle inscription
+  document.querySelector('.step[data-step="2"]').style.display = '';
+  currentStep = 0; updateSteps();
+}
+function candidateLogin(){
+  const user = document.getElementById('loginUsername').value.trim();
+  const pass = document.getElementById('loginPassword').value;
+  const msg = document.getElementById('loginCandidateMsg');
+  if(!user || !pass){ msg.textContent = "Renseignez votre nom d'utilisateur et mot de passe."; return; }
+  const found = candidates.find(c => c.username === user && c.password === pass);
+  if(!found){ msg.textContent = 'Identifiants incorrects.'; return; }
+  msg.textContent = '';
+  loadCandidateForEditing(found);
+}
+function loadCandidateForEditing(c){
+  editingCandidateId = c.id;
+  document.getElementById('formTitle').textContent = 'Modifier mon profil';
+  document.getElementById('candidateLoginWrap').classList.add('hidden');
+  document.getElementById('candidateFormWrap').classList.remove('hidden');
+  // Étape paiement masquée en mode édition (déjà payé lors de l'inscription initiale)
+  document.getElementById('cstep2').style.display = 'none';
+  document.querySelector('.step[data-step="2"]').style.display = 'none';
+
+  document.getElementById('f_username').value = c.username || '';
+  document.getElementById('f_password').value = c.password || '';
+  document.getElementById('f_nom').value = c.nom || '';
+  document.getElementById('f_pob').value = c.lieuNaissance || '';
+  document.getElementById('f_pays').value = c.pays || "Côte d'Ivoire";
+  document.getElementById('f_c1').value = c.contact1 || '';
+  document.getElementById('f_c2').value = c.contact2 || '';
+  document.getElementById('f_email').value = c.email || '';
+  document.getElementById('f_etude').value = c.etude || '';
+  document.getElementById('f_poste').value = c.poste || '';
+  document.getElementById('f_ville').value = c.ville || '';
+  document.getElementById('f_commune').value = c.commune || '';
+  document.getElementById('f_nat').value = c.nat || '';
+  document.getElementById('f_matri').value = c.matri || 'Célibataire';
+  document.getElementById('f_enfants').value = c.enfants || 0;
+  document.getElementById('f_exp').value = c.exp || '';
+  document.getElementById('f_comp').value = c.comp || '';
+  document.getElementById('f_moti').value = c.moti || '';
+  document.getElementById('f_urg1_nom').value = c.urgence?.p1?.nom || '';
+  document.getElementById('f_urg1_tel').value = c.urgence?.p1?.tel || '';
+  document.getElementById('f_urg2_nom').value = c.urgence?.p2?.nom || '';
+  document.getElementById('f_urg2_tel').value = c.urgence?.p2?.tel || '';
+
+  photoId = c.photoId || null; photoFull = c.photoFull || null;
+  otherPhotos = (c.otherPhotos || []).slice(); documents = (c.documents || []).slice();
+  if(photoId) document.getElementById('pIdBox').innerHTML = `<img src="${photoId}">`;
+  if(photoFull) document.getElementById('pFullBox').innerHTML = `<img src="${photoFull}">`;
+  document.getElementById('otherCount').textContent = otherPhotos.length;
+  document.getElementById('otherPhotos').innerHTML = otherPhotos.map(p=>`<img src="${p}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;">`).join('');
+  renderDocsList();
+
+  currentStep = 0; updateSteps();
+  // Remplace le bouton final par "Enregistrer les modifications"
+  document.getElementById('cstep1').insertAdjacentHTML('beforeend',
+    '<button type="button" class="btn-green" id="saveEditBtn" style="width:100%; justify-content:center; margin-top:18px;" onclick="saveProfileEdits()">💾 Enregistrer les modifications</button>');
+}
+function saveProfileEdits(){
+  if(!editingCandidateId) return;
+  const update = {
+    nom: document.getElementById('f_nom').value,
+    lieuNaissance: document.getElementById('f_pob').value,
+    pays: document.getElementById('f_pays').value,
+    contact2: document.getElementById('f_c2').value,
+    email: document.getElementById('f_email').value,
+    etude: document.getElementById('f_etude').value,
+    poste: document.getElementById('f_poste').value,
+    ville: document.getElementById('f_ville').value,
+    commune: document.getElementById('f_commune').value,
+    nat: document.getElementById('f_nat').value,
+    matri: document.getElementById('f_matri').value,
+    enfants: document.getElementById('f_enfants').value,
+    exp: document.getElementById('f_exp').value,
+    comp: document.getElementById('f_comp').value,
+    moti: document.getElementById('f_moti').value,
+    urgence: {
+      p1: { nom: document.getElementById('f_urg1_nom').value, tel: document.getElementById('f_urg1_tel').value },
+      p2: { nom: document.getElementById('f_urg2_nom').value, tel: document.getElementById('f_urg2_tel').value },
+    },
+    photoId, photoFull, otherPhotos: otherPhotos.filter(Boolean), documents,
+  };
+  if(firebaseReady){
+    db.ref('candidates/'+editingCandidateId).update(update)
+      .then(()=> alert('Profil mis à jour avec succès !'))
+      .catch(()=> alert("Erreur lors de l'enregistrement."));
+  } else {
+    const c = candidates.find(x=>x.id===editingCandidateId);
+    Object.assign(c, update);
+    alert('Profil mis à jour (mode démo local).');
+  }
+}
+
 let currentStep = 0;
 function updateSteps(){
   document.querySelectorAll('.step').forEach((el,i)=>{
@@ -516,7 +670,26 @@ function nextStep(){
 function prevStep(){ currentStep = Math.max(0, currentStep-1); updateSteps(); }
 
 // ---------- Photos ----------
-let photoId=null, photoFull=null, otherPhotos=[];
+let photoId=null, photoFull=null, otherPhotos=[], documents=[];
+
+function addDocument(input){
+  const f = input.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    documents.push({ name: f.name, data: reader.result, type: f.type });
+    renderDocsList();
+  };
+  reader.readAsDataURL(f);
+}
+function removeDocument(i){ documents.splice(i,1); renderDocsList(); }
+function renderDocsList(){
+  const el = document.getElementById('docsList');
+  el.innerHTML = documents.map((d,i)=>`
+    <div class="row-between" style="background:var(--bg); padding:10px; border-radius:10px;">
+      <span>📄 ${d.name}</span>
+      <button type="button" class="btn-ghost" style="padding:6px 10px;" onclick="removeDocument(${i})">🗑️</button>
+    </div>`).join('');
+}
 
 function handlePhoto(input, boxId){
   const f = input.files[0]; if(!f) return;
@@ -621,18 +794,30 @@ function partagerPosition(){
 }
 
 function submitPayment(){
+  const username = document.getElementById('f_username').value.trim();
+  const password = document.getElementById('f_password').value;
+  if(!username || !password){ alert("Choisissez un nom d'utilisateur et un mot de passe pour pouvoir vous reconnecter plus tard."); return; }
   if(!selectedOperator){ alert("Choisissez un opérateur."); return; }
   const num = document.getElementById('payerNumber').value.trim();
   if(!num){ alert("Entrez votre numéro Mobile Money."); return; }
   const ref = document.getElementById('paymentRefInput').value.trim();
   if(ref.length <= 6){ alert("Entrez la référence de paiement reçue de votre opérateur (plus de 6 caractères)."); return; }
   const c = {
+    username, password,
     nom: document.getElementById('f_nom').value,
+    lieuNaissance: document.getElementById('f_pob').value,
     dateNaissance: getDobValue(),
     poste: document.getElementById('f_poste').value,
     pays: document.getElementById('f_pays').value,
     ville: document.getElementById('f_ville').value,
-    contact1: (document.getElementById('f_c1_code').value + document.getElementById('f_c1').value.replace(/\D/g,'').replace(/^0/,'')),
+    commune: document.getElementById('f_commune').value,
+    contact1: (()=>{
+      const code = document.getElementById('f_c1_code').value;
+      const pays = document.getElementById('f_pays').value;
+      let num = document.getElementById('f_c1').value.replace(/\D/g,'');
+      if(num.startsWith('0') && !KEEP_LEADING_ZERO.includes(pays)) num = num.slice(1);
+      return code + num;
+    })(),
     contact2: document.getElementById('f_c2').value,
     email: document.getElementById('f_email').value,
     etude: document.getElementById('f_etude').value,
@@ -642,7 +827,11 @@ function submitPayment(){
     nat: document.getElementById('f_nat').value,
     matri: document.getElementById('f_matri').value,
     enfants: document.getElementById('f_enfants').value,
-    photoId, photoFull, otherPhotos: otherPhotos.filter(Boolean),
+    urgence: {
+      p1: { nom: document.getElementById('f_urg1_nom').value, tel: document.getElementById('f_urg1_tel').value },
+      p2: { nom: document.getElementById('f_urg2_nom').value, tel: document.getElementById('f_urg2_tel').value },
+    },
+    photoId, photoFull, otherPhotos: otherPhotos.filter(Boolean), documents,
     position: candidatePosition, // {lat,lng} ou null si non partagée
     statut:'attente', bloque:false,
     paiement:{ montant:selectedAmount, operateur:selectedOperator.name, numero:num, ref, valide:false },
@@ -976,25 +1165,37 @@ function changeCode(){
 }
 
 function toolGeoloc(){
+  const withPos = candidates.filter(c=>c.position);
   return `
-    <h2>Géolocalisation</h2>
-    <div class="card" style="max-width:480px;">
-      <p class="note">Active la géolocalisation avec le consentement du navigateur.</p>
-      <button class="btn-blue" onclick="activerGPS()">📍 Activer le GPS</button>
-      <div id="geoResult" style="margin-top:14px;"></div>
-      <div class="card-soft" style="margin-top:12px;">
-        <span class="note">Carte intégrée : ajoutez votre clé Google Maps API dans votre configuration serveur pour afficher une carte embarquée (&lt;iframe src="https://www.google.com/maps/embed/v1/place?key=VOTRE_CLE&..."&gt;).</span>
-      </div>
-    </div>`;
+    <h2>📍 Localiser un candidat</h2>
+    <p class="note">Position partagée volontairement par le candidat à son inscription (avec son consentement) — sélectionnez son numéro pour le localiser sur la carte.</p>
+    <div class="field" style="max-width:420px;">
+      <label>Numéro du candidat</label>
+      <select id="geoSelect" onchange="showCandidateGeoloc()">
+        <option value="">— Choisir —</option>
+        ${withPos.map(c=>`<option value="${c.id}">${c.nom} — ${c.contact1}</option>`).join('')}
+      </select>
+    </div>
+    ${!withPos.length ? '<p class="note">Aucun candidat n\'a encore partagé sa position.</p>' : ''}
+    <div id="geoResult" style="margin-top:14px; max-width:480px;"></div>`;
 }
-function activerGPS(){
-  if(!navigator.geolocation){ alert('Géolocalisation non supportée.'); return; }
-  navigator.geolocation.getCurrentPosition(pos=>{
-    const {latitude, longitude} = pos.coords;
-    document.getElementById('geoResult').innerHTML = `
-      <p>Position : ${latitude.toFixed(4)}, ${longitude.toFixed(4)}</p>
-      <a class="btn btn-ghost" href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ouvrir dans Google Maps</a>`;
-  }, ()=>{ document.getElementById('geoResult').innerHTML = '<p class="note" style="color:#c0392b;">Consentement refusé ou position indisponible.</p>'; }, {enableHighAccuracy:true});
+function showCandidateGeoloc(){
+  const id = document.getElementById('geoSelect').value;
+  const box = document.getElementById('geoResult');
+  if(!id){ box.innerHTML=''; return; }
+  const c = candidates.find(x=>x.id===id);
+  if(!c || !c.position){ box.innerHTML = '<p class="note">Position introuvable.</p>'; return; }
+  const {lat,lng} = c.position;
+  box.innerHTML = `
+    <div class="card">
+      <b>${c.nom}</b> — ${c.contact1}
+      ${MAPS_API_KEY ? `
+        <iframe width="100%" height="240" style="border:0; border-radius:12px; margin-top:10px;" loading="lazy"
+          src="https://www.google.com/maps/embed/v1/place?key=${MAPS_API_KEY}&q=${lat},${lng}">
+        </iframe>` : ''}
+      <a class="btn btn-ghost" style="margin-top:10px; display:inline-flex;" target="_blank"
+         href="https://www.google.com/maps?q=${lat},${lng}">Ouvrir dans Google Maps</a>
+    </div>`;
 }
 
 // ---------- Init ----------
