@@ -163,7 +163,7 @@
 
   <div id="candidateLoginWrap" class="hidden" style="max-width:380px; margin:20px auto; text-align:center; padding:0 16px;">
     <h2>Connexion à mon compte</h2>
-    <div class="field" style="text-align:left;"><label>Nom d'utilisateur</label><input id="loginUsername"></div>
+    <div class="field" style="text-align:left;"><label>Nom d'utilisateur, téléphone ou nom complet</label><input id="loginUsername" placeholder="L'un des trois"></div>
     <div class="field" style="text-align:left;">
       <label>Mot de passe</label>
       <div class="pass-wrap"><span class="lock">🔒</span><input type="password" id="loginPassword"><button class="eye" onclick="toggleShow('loginPassword',this)">👁️</button></div>
@@ -287,14 +287,16 @@
 
       <h3>1. Montant à payer</h3>
       <div class="card" style="border-color:var(--pink); text-align:center; margin-bottom:6px;">
-        <span style="font-size:30px; font-weight:800;" id="amountDisplay">5000</span>
-        <span style="color:var(--pink); font-weight:800;"> F CFA</span>
+        <input id="amountInput" type="number" min="0" value="5000" oninput="onAmountTyped()"
+          style="border:none; font-size:30px; font-weight:800; text-align:center; width:65%; padding:0; color:var(--ink);">
+        <span style="color:var(--pink); font-weight:800;">F CFA</span>
       </div>
-      <p class="note">Entre 1 000 et 50 000 F CFA (ou devise équivalente à l'international)</p>
+      <p class="note">Tapez le montant de votre choix, ou sélectionnez un montant rapide ci-dessous</p>
       <div class="amount-grid" id="amountGrid"></div>
 
       <h3 style="margin-top:22px;">2. Choisir votre opérateur</h3>
       <div id="operatorList"></div>
+      <div id="operatorInstructions" class="card-soft hidden" style="margin-bottom:16px;"></div>
 
       <h3 style="margin-top:22px;">3. Votre numéro Mobile Money</h3>
       <div class="field"><input id="payerNumber" placeholder="07 00 00 00 00"></div>
@@ -427,15 +429,22 @@ if(firebaseReady){
    Cloud Functions) qui garde la clé côté serveur. */
 
 const OPERATORS = [
-  {id:'wave', name:'Wave', number:'+225 07 48 93 56 86', color:'#1DC8E0', code:'W', ussd:null},
-  {id:'mtn', name:'MTN Mobile Money', number:'+225 05 74 53 36 36', color:'#FFCC00', code:'M', ussd:'*133#'},
-  {id:'moov', name:'Moov Money', number:'+225 01 73 77 39 39', color:'#0072CE', code:'MV', ussd:'*155#'},
-  {id:'orange', name:'Orange Money', number:'+225 07 49 97 09 18', color:'#FF6600', code:'OM', ussd:'#144#'},
+  {id:'wave', name:'Wave', number:'+225 07 48 93 56 86', color:'#1DC8E0', code:'W', ussd:null,
+   instructions:"Ouvrez l'app Wave → \"Envoyer\" → entrez ce numéro → entrez le montant → confirmez. Vous recevrez un SMS avec la référence de la transaction."},
+  {id:'mtn', name:'MTN Mobile Money', number:'+225 05 74 53 36 36', color:'#FFCC00', code:'M', ussd:'*133#',
+   instructions:"Composez *133# → \"Transférer de l'argent\" → entrez ce numéro → entrez le montant → validez avec votre code secret. La référence arrive par SMS."},
+  {id:'moov', name:'Moov Money', number:'+225 01 73 77 39 39', color:'#0072CE', code:'MV', ussd:'*155#',
+   instructions:"Composez *155# → \"Transfert d'argent\" → entrez ce numéro → entrez le montant → validez avec votre code secret. La référence arrive par SMS."},
+  {id:'orange', name:'Orange Money', number:'+225 07 49 97 09 18', color:'#FF6600', code:'OM', ussd:'#144#',
+   instructions:"Composez #144# → \"Transfert d'argent\" → entrez ce numéro → entrez le montant → validez avec votre code secret. La référence arrive par SMS."},
 ];
 const OPERATORS_INTL = [
-  {id:'wave_intl', name:'Wave (international)', number:'+225 07 48 93 56 86', color:'#1DC8E0', code:'W'},
-  {id:'worldremit', name:'WorldRemit', number:'Compte SHAMAN CHOOZ PRODUCTION', color:'#5B2A86', code:'WR'},
-  {id:'wu', name:'Western Union', number:'Compte SHAMAN CHOOZ PRODUCTION', color:'#FFC72C', code:'WU'},
+  {id:'wave_intl', name:'Wave (international)', number:'+225 07 48 93 56 86', color:'#1DC8E0', code:'W',
+   instructions:"Depuis l'app Wave (si disponible dans votre pays), envoyez vers ce numéro ivoirien. Sinon, utilisez WorldRemit ou Western Union ci-dessous."},
+  {id:'worldremit', name:'WorldRemit', number:'Compte SHAMAN CHOOZ PRODUCTION', color:'#5B2A86', code:'WR',
+   instructions:"Sur l'app ou le site WorldRemit : choisissez Côte d'Ivoire → Mobile Money comme mode de réception → entrez le numéro +225 07 48 93 56 86 → montant → payez. Conservez la référence WorldRemit reçue par email/SMS."},
+  {id:'wu', name:'Western Union', number:'Compte SHAMAN CHOOZ PRODUCTION', color:'#FFC72C', code:'WU',
+   instructions:"En agence ou via l'app Western Union : envoyez vers Abidjan, Côte d'Ivoire, en indiquant le nom du bénéficiaire SHAMAN CHOOZ PRODUCTION. Conservez le numéro de suivi (MTCN) — c'est votre référence à soumettre."},
 ];
 const AMOUNT_PRESETS = [1000,2500,5000,10000,25000,50000];
 
@@ -462,6 +471,7 @@ if(firebaseReady){
     const data = snapshot.val() || {};
     candidates = Object.keys(data).map(key => ({ id:key, ...data[key] }));
     if(!document.getElementById('adminPanel').classList.contains('hidden')) renderAdmin();
+    if(editingCandidateId && document.getElementById('msgThreadCandidate')) renderMessageThread('msgThreadCandidate', editingCandidateId);
   });
 } else {
   candidates = seedCandidates;
@@ -559,11 +569,18 @@ function startNewRegistration(){
   currentStep = 0; updateSteps();
 }
 function candidateLogin(){
-  const user = document.getElementById('loginUsername').value.trim();
+  const input = document.getElementById('loginUsername').value.trim().toLowerCase();
+  const inputDigits = input.replace(/\D/g,'');
   const pass = document.getElementById('loginPassword').value;
   const msg = document.getElementById('loginCandidateMsg');
-  if(!user || !pass){ msg.textContent = "Renseignez votre nom d'utilisateur et mot de passe."; return; }
-  const found = candidates.find(c => c.username === user && c.password === pass);
+  if(!input || !pass){ msg.textContent = "Renseignez votre identifiant et mot de passe."; return; }
+  const found = candidates.find(c => {
+    if(c.password !== pass) return false;
+    if((c.username||'').toLowerCase() === input) return true;
+    if((c.nom||'').toLowerCase() === input) return true;
+    if(inputDigits && (c.contact1||'').replace(/\D/g,'').endsWith(inputDigits)) return true;
+    return false;
+  });
   if(!found){ msg.textContent = 'Identifiants incorrects.'; return; }
   msg.textContent = '';
   loadCandidateForEditing(found);
@@ -609,9 +626,46 @@ function loadCandidateForEditing(c){
   renderDocsList();
 
   currentStep = 0; updateSteps();
-  // Remplace le bouton final par "Enregistrer les modifications"
-  document.getElementById('cstep1').insertAdjacentHTML('beforeend',
-    '<button type="button" class="btn-green" id="saveEditBtn" style="width:100%; justify-content:center; margin-top:18px;" onclick="saveProfileEdits()">💾 Enregistrer les modifications</button>');
+  // Remplace le bouton final par "Enregistrer les modifications" + messagerie avec l'admin
+  document.getElementById('cstep1').insertAdjacentHTML('beforeend', `
+    <button type="button" class="btn-green" id="saveEditBtn" style="width:100%; justify-content:center; margin-top:18px;" onclick="saveProfileEdits()">💾 Enregistrer les modifications</button>
+    <div class="card-soft" style="margin-top:22px;">
+      <b>💬 Messagerie avec SHAMAN CHOOZ PRODUCTION</b>
+      <div id="msgThreadCandidate" style="margin:12px 0; max-height:260px; overflow-y:auto;"></div>
+      <textarea id="msgInputCandidate" rows="2" placeholder="Écrire un message…" style="width:100%;"></textarea>
+      <button type="button" class="btn-blue" style="margin-top:8px;" onclick="sendCandidateMessage()">Envoyer</button>
+    </div>`);
+  renderMessageThread('msgThreadCandidate', c.id);
+}
+function renderMessageThread(containerId, candidateId){
+  const c = candidates.find(x=>x.id===candidateId);
+  const box = document.getElementById(containerId);
+  if(!box) return;
+  const msgs = c && c.messages ? Object.values(c.messages).sort((a,b)=> (a.date||'').localeCompare(b.date||'')) : [];
+  if(!msgs.length){ box.innerHTML = '<p class="note">Aucun message pour le moment.</p>'; return; }
+  box.innerHTML = msgs.map(m => `
+    <div style="text-align:${m.from==='admin'?'left':'right'}; margin-bottom:8px;">
+      <span style="display:inline-block; max-width:80%; padding:8px 12px; border-radius:12px; font-size:14px;
+        background:${m.from==='admin'?'var(--blue-light)':'var(--pink-light)'};">
+        <b style="font-size:11px; display:block; opacity:.7;">${m.from==='admin' ? 'SHAMAN CHOOZ' : 'Vous'}</b>
+        ${m.text}
+      </span>
+    </div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+function sendCandidateMessage(){
+  const input = document.getElementById('msgInputCandidate');
+  const text = input.value.trim();
+  if(!text || !editingCandidateId) return;
+  const msg = { from:'candidate', text, date: new Date().toISOString() };
+  if(firebaseReady){
+    db.ref('candidates/'+editingCandidateId+'/messages').push(msg);
+  } else {
+    const c = candidates.find(x=>x.id===editingCandidateId);
+    c.messages = c.messages || {}; c.messages['local_'+Date.now()] = msg;
+    renderMessageThread('msgThreadCandidate', editingCandidateId);
+  }
+  input.value = '';
 }
 function saveProfileEdits(){
   if(!editingCandidateId) return;
@@ -734,9 +788,15 @@ function renderAmounts(){
     const div = document.createElement('div');
     div.className = 'amount-opt' + (a===selectedAmount ? ' selected':'');
     div.textContent = fmt(a) + ' F';
-    div.onclick = ()=>{ selectedAmount = a; document.getElementById('amountDisplay').textContent = fmt(a); updateSummary(); renderAmounts(); };
+    div.onclick = ()=>{ selectedAmount = a; document.getElementById('amountInput').value = a; updateSummary(); renderAmounts(); };
     grid.appendChild(div);
   });
+}
+function onAmountTyped(){
+  const val = Number(document.getElementById('amountInput').value) || 0;
+  selectedAmount = val;
+  updateSummary();
+  renderAmounts();
 }
 function renderOperators(){
   const list = payZone==='ci' ? OPERATORS : OPERATORS_INTL;
@@ -751,6 +811,13 @@ function renderOperators(){
     div.onclick = ()=>{ selectedOperator = op; updateSummary(); renderOperators(); };
     wrap.appendChild(div);
   });
+  const instrBox = document.getElementById('operatorInstructions');
+  if(selectedOperator){
+    instrBox.classList.remove('hidden');
+    instrBox.innerHTML = `<b>📋 Comment payer avec ${selectedOperator.name}</b><p style="margin-top:6px;">${selectedOperator.instructions}</p>`;
+  } else {
+    instrBox.classList.add('hidden'); instrBox.innerHTML = '';
+  }
 }
 function updateSummary(){
   document.getElementById('sumOp').textContent = selectedOperator ? selectedOperator.name : '--';
@@ -894,7 +961,10 @@ function renderAdmin(tool){
 
   const el = document.getElementById('adminContent');
   if(currentTool==='dashboard') el.innerHTML = toolDashboard();
-  else if(currentTool==='candidats') el.innerHTML = selectedCandidateId ? toolCandidateDetail(selectedCandidateId) : toolCandidatsList();
+  else if(currentTool==='candidats'){
+    el.innerHTML = selectedCandidateId ? toolCandidateDetail(selectedCandidateId) : toolCandidatsList();
+    if(selectedCandidateId) renderMessageThread('msgThreadAdmin', selectedCandidateId);
+  }
   else if(currentTool==='paiements') el.innerHTML = toolPaiements();
   else if(currentTool==='blacklist') el.innerHTML = toolBlacklist();
   else if(currentTool==='notifications') el.innerHTML = toolNotifications();
@@ -1026,7 +1096,28 @@ function toolCandidateDetail(id){
         <img src="${qrUrl('SHAMANCHOOZ:'+c.id)}" width="140" height="140">
         <p class="note">QR profil ${c.id}</p>
       </div>
+
+      <div class="card-soft" style="margin-top:16px;">
+        <b>💬 Messagerie avec ${c.nom}</b>
+        <div id="msgThreadAdmin" style="margin:12px 0; max-height:260px; overflow-y:auto;"></div>
+        <textarea id="msgInputAdmin" rows="2" placeholder="Répondre au candidat…" style="width:100%;"></textarea>
+        <button class="btn-blue" style="margin-top:8px;" onclick="sendAdminMessage('${c.id}')">Envoyer</button>
+      </div>
     </div>`;
+}
+function sendAdminMessage(id){
+  const input = document.getElementById('msgInputAdmin');
+  const text = input.value.trim();
+  if(!text) return;
+  const msg = { from:'admin', text, date: new Date().toISOString() };
+  if(firebaseReady){
+    db.ref('candidates/'+id+'/messages').push(msg);
+  } else {
+    const c = candidates.find(x=>x.id===id);
+    c.messages = c.messages || {}; c.messages['local_'+Date.now()] = msg;
+    renderMessageThread('msgThreadAdmin', id);
+  }
+  input.value = '';
 }
 function validerPaiement(id){
   if(firebaseReady){ db.ref('candidates/'+id).update({ statut:'actif', 'paiement/valide': true }); return; }
